@@ -1,1 +1,1 @@
-# cat-vs-dogs-classification-with-augumentation
+# cat-vs-dogs-classification-without-augumentation
