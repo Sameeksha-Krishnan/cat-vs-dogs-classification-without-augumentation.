@@ -1,0 +1,106 @@
+import matplotlib.pyplot as plt
+import os
+import numpy as np
+import tensorflow as tf
+
+from tensorflow.keras import layers
+from tensorflow.keras import losses
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+import logging
+logger = tf.get_logger()
+logger.setLevel(logging.ERROR)
+
+URL = 'https://storage.googleapis.com/mledu-datasets/cats_and_dogs_filtered.zip'
+dataset = tf.keras.utils.get_file('cats_and_dogs_filtered.zip', origin = URL, extract = True, cache_dir = '.', cache_subdir = '')
+
+dataset_dir = os.path.join(os.path.dirname(dataset), 'cats_and_dogs_filtered')
+#!find $dataset_dir -type d -print
+os.listdir(dataset_dir)
+
+train_dir = os.path.join(dataset_dir, 'train')
+os.listdir(train_dir)
+
+val_dir = os.path.join(dataset_dir, 'validation')
+os.listdir(val_dir)
+
+train_cats_dir = os.path.join(train_dir, 'cats')
+train_dogs_dir = os.path.join(train_dir, 'dogs')
+val_cats_dir = os.path.join(val_dir, 'cats')
+val_dogs_dir = os.path.join(val_dir, 'dogs')
+
+num_train_cats = len(os.listdir(train_cats_dir))
+num_train_dogs = len(os.listdir(train_dogs_dir))
+num_val_cats = len(os.listdir(val_cats_dir))
+num_val_dogs = len(os.listdir(val_dogs_dir))
+
+total_train = num_train_dogs + num_train_cats
+total_val = num_val_dogs + num_val_cats
+
+BATCH_SIZE = 100
+IMAGE_SHAPE = 150
+
+train_image_generator = ImageDataGenerator(rescale = 1./255)
+val_image_generator = ImageDataGenerator(rescale = 1./255)
+
+train_data_gen = train_image_generator.flow_from_directory(batch_size = BATCH_SIZE, directory = train_dir, shuffle = True, target_size = (IMAGE_SHAPE, IMAGE_SHAPE), class_mode = 'binary')
+val_dat_gen = val_image_generator.flow_from_directory(batch_size = BATCH_SIZE, directory = val_dir, shuffle = False, target_size = (IMAGE_SHAPE, IMAGE_SHAPE), class_mode = 'binary')
+
+sample_training_images, _ = next(train_data_gen)
+
+def plot_image(image_arr):
+    fig, axes = plt.subplots(1, 5, figsize = (20, 20)) # frame, subplot
+    axes = axes.flatten() # iterate
+    for (img, ax) in zip(image_arr, axes):
+        ax.imshow(img)
+    plt.tight_layout()
+    plt.show()
+
+plot_image(sample_training_images[:5])
+
+model = tf.keras.models.Sequential([layers.Conv2D(32, (3, 3), activation ='relu', input_shape = (150, 150, 3)),
+                                    layers.MaxPooling2D(2, 2),
+
+                                    layers.Conv2D(64, (3, 3), activation='relu'),
+                                    layers.MaxPooling2D(2, 2),
+
+                                    layers.Conv2D(128, (3, 3), activation='relu'),
+                                    layers.MaxPooling2D(2, 2),
+
+                                    layers.Conv2D(128, (3, 3), activation='relu'),
+                                    layers.MaxPooling2D(2, 2),
+
+                                    layers.Flatten(),
+                                    layers.Dense(512, activation = 'relu'),
+                                    layers.Dense(2)])
+
+model.compile(optimizer = 'adam', loss = losses.SparseCategoricalCrossentropy(from_logits = True), metrics = ['accuracy'])
+
+model.summary()
+
+EPOCHS = 100
+history = model.fit_generator(train_data_gen, steps_per_epoch = int(np.ceil(total_train / float(BATCH_SIZE))), epochs = EPOCHS,
+                              validation_data = val_dat_gen, validation_steps = int(np.ceil(total_val / float(BATCH_SIZE))))
+
+acc = history.history['accuracy']
+val_acc = history.history['val_accuracy']
+
+loss = history.history['loss']
+val_loss = history.history['val_loss']
+
+epochs_range = range(EPOCHS)
+
+plt.figure(figsize = (20, 20))
+plt.subplot(1, 2, 1)
+plt.plot(epochs_range, acc, label = 'Training Accuracy')
+plt.plot(epochs_range, val_acc, label = 'Validation Accuracy')
+plt.legend(loc = 'lower right')
+plt.title('Training and Validation Accuracy')
+
+plt.subplot(1, 2, 2)
+plt.plot(epochs_range, loss, label = 'Training Loss')
+plt.plot(epochs_range, val_loss, label = 'Validation Loss')
+plt.legend(loc = 'upper right')
+plt.title('Training and Validation Loss')
+plt.savefig('./foo.png')
+plt.show()
